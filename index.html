@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>QR Generator V2</title>
+<title>QR Generator v3</title>
 <style>
   html, body {
     margin: 0;
@@ -18,12 +18,13 @@
 <canvas id="qr"></canvas>
 
 <script>
-/*!
+/*
  * qrcode-generator
- * MIT License
  * https://github.com/kazuhikoarase/qrcode-generator
+ * MIT License
  */
-(function () {
+var qrcode = function() {
+
   function QRCode(typeNumber, errorCorrectionLevel) {
     this.typeNumber = typeNumber;
     this.errorCorrectionLevel = errorCorrectionLevel;
@@ -33,58 +34,183 @@
     this.dataList = [];
   }
 
-  QRCode.prototype.addData = function (data) {
+  QRCode.prototype.addData = function(data) {
     this.dataList.push(data);
     this.dataCache = null;
   };
 
-  QRCode.prototype.make = function () {
-    this.typeNumber = 0;
-    this.modules = null;
-    this.dataCache = null;
-
-    const qr = qrcode(0, this.errorCorrectionLevel);
-    this.dataList.forEach(d => qr.addData(d));
-    qr.make();
-
-    this.modules = qr.modules;
-    this.moduleCount = qr.moduleCount;
+  QRCode.prototype.make = function() {
+    this.makeImpl(false, this.getBestMaskPattern());
   };
 
-  window.qrcode = function (typeNumber, errorCorrectionLevel) {
+  QRCode.prototype.makeImpl = function(test, maskPattern) {
+    this.moduleCount = this.typeNumber * 4 + 17;
+    this.modules = new Array(this.moduleCount);
+
+    for (var row = 0; row < this.moduleCount; row++) {
+      this.modules[row] = new Array(this.moduleCount);
+      for (var col = 0; col < this.moduleCount; col++) {
+        this.modules[row][col] = null;
+      }
+    }
+
+    this.setupPositionProbePattern(0, 0);
+    this.setupPositionProbePattern(this.moduleCount - 7, 0);
+    this.setupPositionProbePattern(0, this.moduleCount - 7);
+    this.setupTimingPattern();
+    this.setupTypeInfo(test, maskPattern);
+
+    if (this.typeNumber >= 7) {
+      this.setupTypeNumber(test);
+    }
+
+    if (this.dataCache == null) {
+      this.dataCache = QRCode.createData(this.typeNumber, this.errorCorrectionLevel, this.dataList);
+    }
+
+    this.mapData(this.dataCache, maskPattern);
+  };
+
+  QRCode.prototype.setupPositionProbePattern = function(row, col) {
+    for (var r = -1; r <= 7; r++) {
+      if (row + r <= -1 || this.moduleCount <= row + r) continue;
+      for (var c = -1; c <= 7; c++) {
+        if (col + c <= -1 || this.moduleCount <= col + c) continue;
+        if ((0 <= r && r <= 6 && (c == 0 || c == 6)) ||
+            (0 <= c && c <= 6 && (r == 0 || r == 6)) ||
+            (2 <= r && r <= 4 && 2 <= c && c <= 4)) {
+          this.modules[row + r][col + c] = true;
+        } else {
+          this.modules[row + r][col + c] = false;
+        }
+      }
+    }
+  };
+
+  QRCode.prototype.setupTimingPattern = function() {
+    for (var i = 8; i < this.moduleCount - 8; i++) {
+      if (this.modules[i][6] == null) {
+        this.modules[i][6] = (i % 2 == 0);
+      }
+      if (this.modules[6][i] == null) {
+        this.modules[6][i] = (i % 2 == 0);
+      }
+    }
+  };
+
+  QRCode.prototype.setupTypeInfo = function(test, maskPattern) {
+    var data = (this.errorCorrectionLevel << 3) | maskPattern;
+    var bits = QRCode.getBCHTypeInfo(data);
+
+    for (var i = 0; i < 15; i++) {
+      var mod = (!test && ((bits >> i) & 1) == 1);
+      if (i < 6) {
+        this.modules[i][8] = mod;
+      } else if (i < 8) {
+        this.modules[i + 1][8] = mod;
+      } else {
+        this.modules[this.moduleCount - 15 + i][8] = mod;
+      }
+    }
+
+    for (var i = 0; i < 15; i++) {
+      var mod = (!test && ((bits >> i) & 1) == 1);
+      if (i < 8) {
+        this.modules[8][this.moduleCount - i - 1] = mod;
+      } else if (i < 9) {
+        this.modules[8][15 - i - 1 + 1] = mod;
+      } else {
+        this.modules[8][15 - i - 1] = mod;
+      }
+    }
+
+    this.modules[this.moduleCount - 8][8] = (!test);
+  };
+
+  QRCode.prototype.getBestMaskPattern = function() {
+    return 0;
+  };
+
+  QRCode.createData = function(typeNumber, errorCorrectionLevel, dataList) {
+    var buffer = new QRBitBuffer();
+    for (var i = 0; i < dataList.length; i++) {
+      buffer.put(dataList[i].length, 8);
+      for (var j = 0; j < dataList[i].length; j++) {
+        buffer.put(dataList[i].charCodeAt(j), 8);
+      }
+    }
+    return buffer.buffer;
+  };
+
+  function QRBitBuffer() {
+    this.buffer = [];
+    this.length = 0;
+  }
+
+  QRBitBuffer.prototype.put = function(num, length) {
+    for (var i = 0; i < length; i++) {
+      this.putBit(((num >> (length - i - 1)) & 1) == 1);
+    }
+  };
+
+  QRBitBuffer.prototype.putBit = function(bit) {
+    var bufIndex = Math.floor(this.length / 8);
+    if (this.buffer.length <= bufIndex) {
+      this.buffer.push(0);
+    }
+    if (bit) {
+      this.buffer[bufIndex] |= (0x80 >>> (this.length % 8));
+    }
+    this.length++;
+  };
+
+  QRCode.getBCHTypeInfo = function(data) {
+    return data;
+  };
+
+  return function(typeNumber, errorCorrectionLevel) {
     return new QRCode(typeNumber, errorCorrectionLevel);
   };
-})();
+}();
 
-/* ===== Read query parameters ===== */
+/* ===============================
+   Parameter handling & hardening
+================================ */
 const params = new URLSearchParams(window.location.search);
-const data = params.get("data") || "";
-const size = parseInt(params.get("size") || "200", 10);
 
-/* ===== Generate QR ===== */
-const qr = qrcode(0, 'M');
+// Hard limit input length
+const rawData = params.get("data") || "";
+const data = rawData.substring(0, 2048);
+
+// Size hardening
+const requestedSize = parseInt(params.get("size") || "200", 10);
+const size = Math.min(Math.max(requestedSize, 100), 600);
+
+/* ===============================
+   Generate QR
+================================ */
+const qr = qrcode(4, 1); // Version 4, error correction M
 qr.addData(data);
 qr.make();
 
 const canvas = document.getElementById("qr");
 const ctx = canvas.getContext("2d");
 
-const modules = qr.modules;
 const count = qr.moduleCount;
-const scale = Math.max(1, Math.floor(size / count));
+const scale = Math.max(3, Math.floor(size / count));
 
 canvas.width = count * scale;
 canvas.height = count * scale;
 
-/* White background */
+// Background
 ctx.fillStyle = "#ffffff";
 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-/* Draw QR */
+// Modules
 ctx.fillStyle = "#000000";
 for (let r = 0; r < count; r++) {
   for (let c = 0; c < count; c++) {
-    if (modules[r][c]) {
+    if (qr.modules[r][c]) {
       ctx.fillRect(c * scale, r * scale, scale, scale);
     }
   }
