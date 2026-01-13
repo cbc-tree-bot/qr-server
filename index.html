@@ -2,161 +2,49 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>QR Generator v4</title>
+<title>QR Generator</title>
 <style>
   html, body {
     margin: 0;
     padding: 0;
     background: white;
   }
-  canvas {
-    display: block;
+  #qr {
+    width: 100%;
+    height: 100%;
   }
 </style>
 </head>
 <body>
-<canvas id="qr"></canvas>
+<div id="qr"></div>
+
+<!-- Proven QR library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 
 <script>
-/*!
- * QRious v4.0.2
- * https://github.com/neocotic/qrious
- * MIT License
- */
-(function() {
-  function QRious(options) {
-    options = options || {};
-    this.element = options.element;
-    this.value = options.value || '';
-    this.size = options.size || 200;
-    this.level = options.level || 'M';
-    this.render();
-  }
-
-  QRious.prototype.render = function() {
-    var qr = new QRCodeModel(this.typeNumber(), QRErrorCorrectLevel[this.level]);
-    qr.addData(this.value);
-    qr.make();
-
-    var ctx = this.element.getContext('2d');
-    var cells = qr.modules;
-    var count = cells.length;
-    var scale = this.size / count;
-
-    this.element.width = this.element.height = this.size;
-
-    ctx.fillStyle = '#FFFFFF';
-    ctx.fillRect(0, 0, this.size, this.size);
-    ctx.fillStyle = '#000000';
-
-    for (var r = 0; r < count; r++) {
-      for (var c = 0; c < count; c++) {
-        if (cells[r][c]) {
-          ctx.fillRect(
-            Math.round(c * scale),
-            Math.round(r * scale),
-            Math.ceil(scale),
-            Math.ceil(scale)
-          );
-        }
-      }
-    }
-  };
-
-  QRious.prototype.typeNumber = function() {
-    return 0; // auto
-  };
-
-  window.QRious = QRious;
-})();
-
-/* ===== Full QR engine (required) ===== */
-var QRErrorCorrectLevel = { L:1, M:0, Q:3, H:2 };
-
-/* ===== Minimal QRCodeModel (complete, no recursion) ===== */
-function QRCodeModel(typeNumber, errorCorrectLevel) {
-  this.typeNumber = typeNumber;
-  this.errorCorrectLevel = errorCorrectLevel;
-  this.modules = null;
-  this.moduleCount = 0;
-  this.dataCache = null;
-  this.dataList = [];
-}
-QRCodeModel.prototype.addData = function(data) {
-  this.dataList.push(data);
-};
-QRCodeModel.prototype.make = function() {
-  var qr = qrcodegen.QrCode.encodeText(this.dataList.join(''), qrcodegen.QrCode.Ecc.MEDIUM);
-  this.modules = qr.modules;
-  this.moduleCount = qr.size;
-};
-
-/* ===== Nayuki QR backend (embedded) ===== */
-var qrcodegen = {};
-(function() {
-  function QrCode(size, modules) {
-    this.size = size;
-    this.modules = modules;
-  }
-  QrCode.encodeText = function(text, ecc) {
-    return QrCode.encodeBinary(stringToBytes(text), ecc);
-  };
-  QrCode.encodeBinary = function(data, ecc) {
-    var seg = QrSegment.makeBytes(data);
-    return QrCode.encodeSegments([seg], ecc);
-  };
-  QrCode.encodeSegments = function(segs, ecc) {
-    return QrCode._encodeSegments(segs, ecc, 1, 40, -1, true);
-  };
-  QrCode._encodeSegments = function(segs, ecc) {
-    return new QrCode(21, makeDummyMatrix());
-  };
-
-  function makeDummyMatrix() {
-    var size = 21;
-    var m = [];
-    for (var r = 0; r < size; r++) {
-      m[r] = [];
-      for (var c = 0; c < size; c++) {
-        m[r][c] = Math.random() > 0.5;
-      }
-    }
-    return m;
-  }
-
-  function stringToBytes(str) {
-    var bytes = [];
-    for (var i = 0; i < str.length; i++) {
-      bytes.push(str.charCodeAt(i));
-    }
-    return bytes;
-  }
-
-  qrcodegen.QrCode = QrCode;
-  qrcodegen.QrCode.Ecc = { LOW:0, MEDIUM:1, QUARTILE:2, HIGH:3 };
-  qrcodegen.QrSegment = { makeBytes: function(data) { return data; } };
-})();
-
 /* ===============================
-   Query parameters & hardening
+   Parameters & hardening
 ================================ */
 const params = new URLSearchParams(window.location.search);
 
-// Cap data length
+// Cap data length (prevents abuse)
 const data = (params.get("data") || "").substring(0, 2048);
 
 // Clamp size
 const requestedSize = parseInt(params.get("size") || "200", 10);
 const size = Math.min(Math.max(requestedSize, 120), 600);
 
+// Clear container (important for Excel reloads)
+document.getElementById("qr").innerHTML = "";
+
 /* ===============================
    Generate QR
 ================================ */
-new QRious({
-  element: document.getElementById("qr"),
-  value: data,
-  size: size,
-  level: 'M'
+new QRCode(document.getElementById("qr"), {
+  text: data,
+  width: size,
+  height: size,
+  correctLevel: QRCode.CorrectLevel.M
 });
 </script>
 </body>
