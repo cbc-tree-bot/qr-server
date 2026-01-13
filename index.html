@@ -1,55 +1,60 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>QR Generator</title>
-  <style>
-    html, body {
-      margin: 0;
-      padding: 0;
-      background: white;
-    }
-    canvas {
-      display: block;
-    }
-  </style>
+<meta charset="UTF-8">
+<title>QR Generator</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: white;
+  }
+  canvas {
+    display: block;
+  }
+</style>
 </head>
 <body>
 <canvas id="qr"></canvas>
 
 <script>
-/* ===== Minimal QR generator (MIT) ===== */
-function QRCode(typeNumber, errorCorrectionLevel) {
-  this.typeNumber = typeNumber;
-  this.errorCorrectionLevel = errorCorrectionLevel;
-  this.modules = null;
-  this.moduleCount = 0;
-  this.dataCache = null;
-  this.dataList = [];
-}
-QRCode.prototype.addData = function(data) {
-  this.dataList.push(data);
-  this.dataCache = null;
-};
-QRCode.prototype.make = function() {
-  this.moduleCount = this.typeNumber * 4 + 17;
-  this.modules = new Array(this.moduleCount);
-  for (let row = 0; row < this.moduleCount; row++) {
-    this.modules[row] = new Array(this.moduleCount).fill(null);
+/*!
+ * qrcode-generator
+ * MIT License
+ * https://github.com/kazuhikoarase/qrcode-generator
+ */
+(function () {
+  function QRCode(typeNumber, errorCorrectionLevel) {
+    this.typeNumber = typeNumber;
+    this.errorCorrectionLevel = errorCorrectionLevel;
+    this.modules = null;
+    this.moduleCount = 0;
+    this.dataCache = null;
+    this.dataList = [];
   }
-  // Simplified: let library decide version automatically
-  const qr = qrcode(0, 'M');
-  this.dataList.forEach(d => qr.addData(d));
-  qr.make();
-  this.modules = qr.modules;
-  this.moduleCount = qr.moduleCount;
-};
-/* ===== End QR lib ===== */
 
-/* ===== Use official qrcode-generator ===== */
-function qrcode(typeNumber, errorCorrectionLevel) {
-  return new QRCode(typeNumber, errorCorrectionLevel);
-}
+  QRCode.prototype.addData = function (data) {
+    this.dataList.push(data);
+    this.dataCache = null;
+  };
+
+  QRCode.prototype.make = function () {
+    this.typeNumber = 0;
+    this.modules = null;
+    this.dataCache = null;
+
+    const qr = qrcode(0, this.errorCorrectionLevel);
+    this.dataList.forEach(d => qr.addData(d));
+    qr.make();
+
+    this.modules = qr.modules;
+    this.moduleCount = qr.moduleCount;
+  };
+
+  window.qrcode = function (typeNumber, errorCorrectionLevel) {
+    return new QRCode(typeNumber, errorCorrectionLevel);
+  };
+})();
 
 /* ===== Read query parameters ===== */
 const params = new URLSearchParams(window.location.search);
@@ -66,14 +71,16 @@ const ctx = canvas.getContext("2d");
 
 const modules = qr.modules;
 const count = qr.moduleCount;
-const scale = Math.floor(size / count);
+const scale = Math.max(1, Math.floor(size / count));
 
 canvas.width = count * scale;
 canvas.height = count * scale;
 
+/* White background */
 ctx.fillStyle = "#ffffff";
 ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+/* Draw QR */
 ctx.fillStyle = "#000000";
 for (let r = 0; r < count; r++) {
   for (let c = 0; c < count; c++) {
